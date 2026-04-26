@@ -1,0 +1,31 @@
+# MicroPython / Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.mpy
+
+# Virtual Environment (per tool Python-side)
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# References (large/binary files)
+references/Robofocus-User-Manual-1.pdf
