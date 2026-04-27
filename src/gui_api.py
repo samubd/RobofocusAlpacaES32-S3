@@ -7,8 +7,7 @@ Provides endpoints for the control panel web interface.
 from controller import controller
 from config import config
 from wifi_manager import wifi
-
-# log_buffer disabled to save memory
+from log_buffer import log_buffer
 
 # WiFi status cache - update every 5 calls to reduce overhead
 _wifi_cache = None
@@ -161,8 +160,19 @@ def register_gui_routes(server):
         except Exception as e:
             return response.error(str(e), 400)
 
-    # Log endpoints disabled to save memory
-    # Use serial monitor for logs instead
+    @server.route("/gui/logs", methods=["GET"])
+    async def get_logs(request, response):
+        try:
+            limit = int(request.query.get('limit', 50))
+            entries = log_buffer.get_entries(limit)
+            return response.json({"logs": entries, "count": len(entries)})
+        except Exception as e:
+            return response.error(str(e), 500)
+
+    @server.route("/gui/logs", methods=["DELETE"])
+    async def delete_logs(request, response):
+        log_buffer.clear()
+        return response.json({"success": True})
 
     print("[gui] Routes registered")
 

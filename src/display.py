@@ -1,14 +1,7 @@
 import time
 import framebuf
 from machine import SPI, Pin
-
-# GC9107 GPIO pins (LoLin S3 Mini Pro schematic v1.0.0)
-_PIN_MOSI = 38
-_PIN_CLK  = 40
-_PIN_CS   = 35
-_PIN_DC   = 36
-_PIN_RST  = 34
-_PIN_BL   = 33
+from board import TFT_MOSI, TFT_CLK, TFT_CS, TFT_DC, TFT_RST, TFT_BL
 
 _WIDTH  = 128
 _HEIGHT = 128
@@ -41,23 +34,24 @@ class StatusDisplay:
             print(f"[display] Init failed: {e}")
 
     def _init_hw(self):
-        self._dc  = Pin(_PIN_DC,  Pin.OUT, value=0)
-        self._cs  = Pin(_PIN_CS,  Pin.OUT, value=1)
-        self._rst = Pin(_PIN_RST, Pin.OUT, value=1)
-        self._bl  = Pin(_PIN_BL,  Pin.OUT, value=0)
+        self._dc  = Pin(TFT_DC,  Pin.OUT, value=0)
+        self._cs  = Pin(TFT_CS,  Pin.OUT, value=1)
+        self._rst = Pin(TFT_RST, Pin.OUT, value=1)
+        self._bl  = Pin(TFT_BL,  Pin.OUT, value=0)
 
         self._spi = SPI(
             1,
             baudrate=40_000_000,
             polarity=0,
             phase=0,
-            sck=Pin(_PIN_CLK),
-            mosi=Pin(_PIN_MOSI),
+            sck=Pin(TFT_CLK),
+            mosi=Pin(TFT_MOSI),
         )
 
         # Allocate framebuffer (128×128×2 bytes, RGB565 little-endian in MicroPython)
         self._buf = bytearray(_WIDTH * _HEIGHT * 2)
         self._fb  = framebuf.FrameBuffer(self._buf, _WIDTH, _HEIGHT, framebuf.RGB565)
+        self._tmp = bytearray(512)  # reused by show() to avoid GC pressure
 
         self._hard_reset()
         self._send_init_sequence()
@@ -139,7 +133,7 @@ class StatusDisplay:
         chunk_size = 512
         view = memoryview(self._buf)
         length = len(self._buf)
-        tmp = bytearray(chunk_size)
+        tmp = self._tmp
 
         self._dc(1)
         self._cs(0)

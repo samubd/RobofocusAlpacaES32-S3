@@ -29,6 +29,7 @@ from alpaca_api import register_alpaca_routes
 import alpaca_api
 from gui_api import register_gui_routes, register_wifi_routes
 from buttons import buttons
+from log_buffer import log_buffer
 
 # Note: log_buffer disabled to save memory
 
@@ -148,6 +149,9 @@ async def main():
     # Show device info
     print(f"[main] Device ID: {config.device_id}")
     print(f"[main] AP SSID: {config.ap_ssid}")
+
+    # Redirect print() to circular log buffer (visible on /logs page)
+    log_buffer.hook_print()
 
     # Collect garbage before starting
     gc.collect()

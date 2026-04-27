@@ -1,8 +1,6 @@
 from machine import I2C, Pin
 import time
-
-_SDA = 12
-_SCL = 11
+from board import IMU_SDA, IMU_SCL
 _ADDRS = (0x6B, 0x6A)  # SA0 floating — probe entrambi
 
 _REG_WHO_AM_I = 0x00
@@ -21,7 +19,7 @@ class IMU:
         self._ok = False
         self._addr = None
         try:
-            self._i2c = I2C(0, scl=Pin(_SCL), sda=Pin(_SDA), freq=400_000)
+            self._i2c = I2C(0, scl=Pin(IMU_SCL), sda=Pin(IMU_SDA), freq=400_000)
             self._probe()
             if self._addr is not None:
                 self._init_hw()

@@ -1,9 +1,7 @@
 from machine import Pin
 import neopixel
 import time
-
-_PIN_PWR  = 7
-_PIN_DATA = 8
+from board import RGB_PWR, RGB_DATA
 
 dim = 0.2  # brightness dimming factor (0.0-1.0)
 class RGBStatus:
@@ -11,8 +9,8 @@ class RGBStatus:
     def __init__(self):
         self._ok = False
         try:
-            Pin(_PIN_PWR, Pin.OUT, value=1)
-            self._np = neopixel.NeoPixel(Pin(_PIN_DATA), 1)
+            Pin(RGB_PWR, Pin.OUT, value=1)
+            self._np = neopixel.NeoPixel(Pin(RGB_DATA), 1)
             self._np[0] = (0, 0, 0)
             self._np.write()
             self._ok = True

@@ -1,9 +1,6 @@
 from machine import Pin
 import time
-
-_PIN_LEFT   = 0   # IO0 BOOT — move in
-_PIN_CENTER = 47  # IO47     — short: cycle step / long: halt
-_PIN_RIGHT  = 48  # IO48     — move out
+from board import BTN_LEFT, BTN_CENTER, BTN_RIGHT
 
 _STEPS = (1, 5, 10, 20, 50)
 _DEBOUNCE_MS  = 50
@@ -23,9 +20,9 @@ class ButtonManager:
         self._center_press_time = 0
 
         self._pins = [
-            Pin(_PIN_LEFT,   Pin.IN, Pin.PULL_UP),
-            Pin(_PIN_CENTER, Pin.IN, Pin.PULL_UP),
-            Pin(_PIN_RIGHT,  Pin.IN, Pin.PULL_UP),
+            Pin(BTN_LEFT,   Pin.IN, Pin.PULL_UP),
+            Pin(BTN_CENTER, Pin.IN, Pin.PULL_UP),
+            Pin(BTN_RIGHT,  Pin.IN, Pin.PULL_UP),
         ]
         self._pins[0].irq(trigger=Pin.IRQ_FALLING, handler=self._isr_left)
         self._pins[1].irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=self._isr_center)

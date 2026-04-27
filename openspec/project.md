@@ -4,10 +4,13 @@
 ASCOM Alpaca server running on an ESP32-S3 microcontroller (MicroPython) for controlling a Robofocus electronic focuser. The device connects to the focuser via UART/serial, exposes an Alpaca-compliant REST API over Wi-Fi, and can be discovered by astronomy clients (NINA, Voyager, SGP) on the local network without any PC-side software.
 
 ## Tech Stack
-- MicroPython (ESP32-S3 target)
-- `asyncio` (uasyncio) for cooperative multitasking
-- Built-in `network` module for Wi-Fi
+- MicroPython (ESP32-S3 target — LoLin S3 Mini Pro, 4 MB Flash, 2 MB PSRAM)
+- `uasyncio` for cooperative multitasking (3 concurrent tasks: main/1 Hz, led/20 Hz, buttons/10 Hz)
+- Built-in `network` module for Wi-Fi (STA + AP fallback)
 - Built-in `machine.UART` for serial communication with Robofocus
+- Built-in `machine.SPI` for GC9107 display (40 MHz)
+- Built-in `machine.I2C` for QMI8658C IMU (400 kHz)
+- Built-in `neopixel` for WS2812B RGB LED
 - Built-in HTTP server (no FastAPI/uvicorn)
 - `ujson` / `json` for JSON serialisation
 
@@ -19,15 +22,21 @@ ASCOM Alpaca server running on an ESP32-S3 microcontroller (MicroPython) for con
 - Keep memory footprint minimal (avoid large string operations in loops)
 
 ### Architecture Patterns
-- **3-Layer Architecture**:
+- **3-Layer Focuser Architecture**:
   - Layer 1: `serial_protocol.py` – UART communication with Robofocus
-  - Layer 2: `controller.py` – Focuser state machine (business logic)
+  - Layer 2: `controller.py` – Focuser state machine (business logic); IMU as primary temperature source
   - Layer 3: `alpaca_api.py` – Alpaca HTTP endpoint handlers
-- `web_server.py` – minimal HTTP routing glue
-- `discovery.py` – UDP broadcast for Alpaca discovery
-- `wifi_manager.py` – Wi-Fi connect / AP fallback
-- `boot.py` / `main.py` – MicroPython entry points
-- **Simulator Mode**: `simulator.py` replaces serial hardware for PC-side testing
+- `web_server.py` – minimal async HTTP routing with Keep-Alive
+- `discovery.py` – UDP broadcast for Alpaca discovery (port 32227)
+- `wifi_manager.py` – Wi-Fi STA connect / AP fallback
+- `main.py` – MicroPython entry point; 3 async tasks (main loop, led_loop, button_loop)
+- `board.py` – centralised pin map with `micropython.const()` (single source of truth for GPIO)
+- `display.py` – GC9107 driver, state-change guard, pre-allocated SPI swap buffer
+- `led.py` – WS2812B state machine (AP/STA/moving/Alpaca-client states)
+- `buttons.py` – ISR-based debounce, long-press detection, producer/consumer pattern
+- `imu.py` – QMI8658C temperature via I2C; -20 °C offset for self-heating compensation
+- `log_buffer.py` – circular buffer (100 entries); hooks `builtins.print` at boot
+- **Simulator Mode**: `simulator.py` replaces serial hardware for testing without Robofocus
 
 ### Deployment
 - Flash MicroPython firmware to ESP32-S3, then upload `src/` files via `mpremote` or Thonny
@@ -95,5 +104,9 @@ ASCOM Alpaca server running on an ESP32-S3 microcontroller (MicroPython) for con
 
 ### Hardware
 - Robofocus electronic focuser (various firmware versions)
-- ESP32-S3 board with Wi-Fi
+- ESP32-S3 LoLin S3 Mini Pro (4 MB Flash, 2 MB PSRAM)
 - RS-232 level shifter (MAX3232 or similar) between ESP32 UART and Robofocus DB9
+- GC9107 128×128 SPI display (on-board)
+- WS2812B RGB LED (on-board, IO7=power, IO8=data)
+- QMI8658C IMU — I2C IO11/IO12; used for ambient temperature (primary source for Alpaca)
+- 3 tactile buttons: IO0 (BOOT/move-in), IO47 (step-cycle/halt), IO48 (move-out)
