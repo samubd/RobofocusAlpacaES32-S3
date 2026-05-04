@@ -54,7 +54,7 @@ class FocuserSimulator:
             time.sleep(0.05)  # 50ms tick rate
         print("[simulator] Movement thread stopped")
 
-    def connect(self) -> bool:
+    async def connect(self) -> bool:
         """Connect to simulator and start movement thread."""
         if self._connected:
             print("[simulator] Already connected")
@@ -70,14 +70,15 @@ class FocuserSimulator:
         print(f"[simulator] Connected (firmware: {self._firmware_version})")
         return True
 
-    def disconnect(self):
+    async def disconnect(self):
         """Disconnect and stop movement thread."""
-        if self._is_moving:
-            self.halt()
+        if await self.is_moving():
+            await self.halt()
 
         # Stop thread
         self._thread_running = False
-        time.sleep(0.1)  # Wait for thread to stop
+        import uasyncio as asyncio
+        await asyncio.sleep_ms(100)  # Wait for thread to stop
 
         self._connected = False
         print("[simulator] Disconnected")
@@ -92,21 +93,21 @@ class FocuserSimulator:
         """Get firmware version."""
         return self._firmware_version if self._connected else None
 
-    def get_position(self) -> int:
+    async def get_position(self) -> int:
         """Get current position (thread-safe)."""
         if not self._connected:
             return 0
         with self._lock:
             return self._position
 
-    def is_moving(self) -> bool:
+    async def is_moving(self) -> bool:
         """Check if moving (thread-safe)."""
         if not self._connected:
             return False
         with self._lock:
             return self._is_moving
 
-    def move_absolute(self, target: int) -> bool:
+    async def move_absolute(self, target: int) -> bool:
         """
         Start movement to absolute position (thread-safe).
 
@@ -134,7 +135,7 @@ class FocuserSimulator:
 
         return True
 
-    def halt(self) -> bool:
+    async def halt(self) -> bool:
         """Stop movement immediately (thread-safe)."""
         if not self._connected:
             return False
@@ -148,7 +149,7 @@ class FocuserSimulator:
 
         return True
 
-    def get_temperature(self) -> float:
+    async def get_temperature(self) -> float:
         """
         Get simulated temperature.
 

@@ -308,13 +308,14 @@ class WebServer:
                         if DEBUG_HTTP:
                             print(f"[web] Err: {e}")
                         response.error(str(e), 500)
+                    # Send response
+                    writer.write(response.build())
+                    await writer.drain()
                 else:
-                    if not await self._serve_static(request, response):
+                    if not await self._serve_static(request, response, writer):
                         response.error("Not Found", 404)
-
-                # Send response
-                writer.write(response.build())
-                await writer.drain()
+                        writer.write(response.build())
+                        await writer.drain()
 
         except asyncio.TimeoutError:
             pass
@@ -324,7 +325,7 @@ class WebServer:
             writer.close()
             await writer.wait_closed()
 
-    async def _serve_static(self, request: Request, response: Response) -> bool:
+    async def _serve_static(self, request: Request, response: Response, writer) -> bool:
         """
         Serve static file if it exists.
 
@@ -367,16 +368,30 @@ class WebServer:
         elif file_path.endswith(".ico"):
             content_type = "image/x-icon"
 
-        # Read and serve file
+        # Read and serve file in chunks
         try:
-            with open(file_path, 'r' if 'text' in content_type or content_type == 'application/javascript' or content_type == 'application/json' else 'rb') as f:
-                content = f.read()
-
             response.status = 200
             response.status_text = "OK"
             response.headers["Content-Type"] = content_type
             response.headers["Cache-Control"] = "max-age=3600"
-            response.body = content
+            response.headers["Content-Length"] = str(stat[6])
+
+            # Write headers
+            writer.write(f"HTTP/1.1 {response.status} {response.status_text}\r\n".encode())
+            for key, value in response.headers.items():
+                writer.write(f"{key}: {value}\r\n".encode())
+            writer.write(b"\r\n")
+            await writer.drain()
+
+            # Stream body
+            with open(file_path, 'rb') as f:
+                while True:
+                    chunk = f.read(1024)
+                    if not chunk:
+                        break
+                    writer.write(chunk)
+                    await writer.drain()
+
             if DEBUG_HTTP:
                 print(f"[web] Static {file_path}")
             return True

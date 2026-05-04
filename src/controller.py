@@ -90,15 +90,15 @@ class FocuserController:
     # Connection
     # ========================================================================
 
-    def connect(self) -> bool:
+    async def connect(self) -> bool:
         """Connect to focuser (hardware or simulator)."""
         self._load_backend()
-        return self._protocol.connect()
+        return await self._protocol.connect()
 
-    def disconnect(self):
+    async def disconnect(self):
         """Disconnect from focuser."""
         if self._protocol:
-            self._protocol.disconnect()
+            await self._protocol.disconnect()
 
     @property
     def connected(self) -> bool:
@@ -118,24 +118,23 @@ class FocuserController:
     # Position
     # ========================================================================
 
-    def get_position(self) -> int:
+    async def get_position(self) -> int:
         """Get current focuser position."""
         if not self.connected:
             return 0
-        return self._protocol.get_position()
+        return await self._protocol.get_position()
 
-    @property
-    def is_moving(self) -> bool:
+    async def is_moving(self) -> bool:
         """Check if focuser is moving."""
         if not self.connected:
             return False
-        return self._protocol.is_moving()
+        return await self._protocol.is_moving()
 
     # ========================================================================
     # Movement
     # ========================================================================
 
-    def move(self, target: int) -> bool:
+    async def move(self, target: int) -> bool:
         """
         Move to absolute position.
 
@@ -152,7 +151,7 @@ class FocuserController:
         if not self.connected:
             raise RuntimeError("Not connected")
 
-        if self.is_moving:
+        if await self.is_moving():
             raise RuntimeError("Movement already in progress")
 
         # Validate bounds
@@ -163,15 +162,15 @@ class FocuserController:
             raise ValueError(f"Target {target} out of bounds ({min_pos}-{max_pos})")
 
         # Validate max increment
-        current = self.get_position()
+        current = await self.get_position()
         delta = abs(target - current)
 
         if delta > config.max_increment:
             raise ValueError(f"Move delta {delta} exceeds max_increment {config.max_increment}")
 
-        return self._protocol.move_absolute(target)
+        return await self._protocol.move_absolute(target)
 
-    def move_relative(self, steps: int, direction: str) -> bool:
+    async def move_relative(self, steps: int, direction: str) -> bool:
         """
         Move relative to current position.
 
@@ -182,7 +181,7 @@ class FocuserController:
         Returns:
             True if movement started.
         """
-        current = self.get_position()
+        current = await self.get_position()
 
         if direction == "in":
             target = current - steps
@@ -194,9 +193,9 @@ class FocuserController:
         # Clamp to bounds
         target = max(config.min_step, min(config.max_step, target))
 
-        return self.move(target)
+        return await self.move(target)
 
-    def halt(self) -> bool:
+    async def halt(self) -> bool:
         """
         Stop movement immediately.
 
@@ -205,13 +204,13 @@ class FocuserController:
         """
         if not self.connected:
             return False
-        return self._protocol.halt()
+        return await self._protocol.halt()
 
     # ========================================================================
     # Temperature
     # ========================================================================
 
-    def get_temperature(self) -> float:
+    async def get_temperature(self) -> float:
         """
         Get temperature in Celsius.
 
@@ -228,7 +227,7 @@ class FocuserController:
         if not self.connected:
             return None
         try:
-            return self._protocol.get_temperature()
+            return await self._protocol.get_temperature()
         except Exception as e:
             print(f"[controller] Temperature error: {e}")
             return None
@@ -237,7 +236,7 @@ class FocuserController:
     # Status
     # ========================================================================
 
-    def get_status(self) -> dict:
+    async def get_status(self) -> dict:
         """
         Get complete focuser status for GUI/API.
 
@@ -245,9 +244,9 @@ class FocuserController:
             Dict with all status fields.
         """
         connected = self.connected
-        position = self.get_position() if connected else 0
-        is_moving = self.is_moving if connected else False
-        temperature = self.get_temperature() if connected else None
+        position = await self.get_position() if connected else 0
+        is_moving = await self.is_moving() if connected else False
+        temperature = await self.get_temperature() if connected else None
 
         return {
             'connected': connected,

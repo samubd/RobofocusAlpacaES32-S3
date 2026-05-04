@@ -47,7 +47,7 @@ def make_response_fast(value) -> str:
     return json.dumps({"Value": value, "ErrorNumber": 0, "ErrorMessage": ""})
 
 
-def get_cached_or_fetch(key: str, fetch_func, ttl_ms: int) -> str:
+async def get_cached_or_fetch(key: str, fetch_func, ttl_ms: int) -> str:
     """
     Get cached JSON response or fetch fresh value.
     Returns pre-built JSON string for fastest response.
@@ -60,7 +60,7 @@ def get_cached_or_fetch(key: str, fetch_func, ttl_ms: int) -> str:
         return cache['json']
 
     # Fetch fresh value
-    value = fetch_func()
+    value = await fetch_func()
     cache['value'] = value
     cache['json'] = make_response_fast(value)
     cache['expires'] = time.ticks_add(now, ttl_ms)
@@ -122,28 +122,30 @@ def register_alpaca_routes(server):
     async def get_connected(request, response):
         """Get connection status (TTL cached)."""
         response.headers["Content-Type"] = "application/json"
-        response.body = get_cached_or_fetch('connected', lambda: controller.connected, _TTL_CONNECTED_MS)
+        async def _fetch(): return controller.connected
+        response.body = await get_cached_or_fetch('connected', _fetch, _TTL_CONNECTED_MS)
         return response
 
     @server.route("/api/v1/focuser/0/position", methods=["GET"])
     async def get_position(request, response):
         """Get current position (TTL cached)."""
         response.headers["Content-Type"] = "application/json"
-        response.body = get_cached_or_fetch('position', controller.get_position, _TTL_POSITION_MS)
+        response.body = await get_cached_or_fetch('position', controller.get_position, _TTL_POSITION_MS)
         return response
 
     @server.route("/api/v1/focuser/0/ismoving", methods=["GET"])
     async def get_ismoving(request, response):
         """Check if focuser is moving (TTL cached)."""
         response.headers["Content-Type"] = "application/json"
-        response.body = get_cached_or_fetch('ismoving', lambda: controller.is_moving, _TTL_ISMOVING_MS)
+        async def _fetch(): return await controller.is_moving()
+        response.body = await get_cached_or_fetch('ismoving', _fetch, _TTL_ISMOVING_MS)
         return response
 
     @server.route("/api/v1/focuser/0/temperature", methods=["GET"])
     async def get_temperature(request, response):
         """Get temperature in Celsius (TTL cached)."""
         response.headers["Content-Type"] = "application/json"
-        response.body = get_cached_or_fetch('temperature', controller.get_temperature, _TTL_TEMPERATURE_MS)
+        response.body = await get_cached_or_fetch('temperature', controller.get_temperature, _TTL_TEMPERATURE_MS)
         return response
 
     @server.route("/api/v1/focuser/0/absolute", methods=["GET"])
@@ -246,10 +248,10 @@ def register_alpaca_routes(server):
             alpaca_client_connected = connected
 
             if connected:
-                controller.connect()
+                await controller.connect()
                 print("[alpaca] Connected")
             else:
-                controller.disconnect()
+                await controller.disconnect()
                 print("[alpaca] Disconnected")
 
             invalidate_cache('connected')  # Force fresh value
@@ -263,7 +265,7 @@ def register_alpaca_routes(server):
         client_id = int(request.form_data.get("ClientTransactionID", 0))
         try:
             position = int(request.form_data.get("Position", 0))
-            controller.move(position)
+            await controller.move(position)
             invalidate_cache()  # Force fresh values after move
             print(f"[alpaca] Move: {position}")
             return response.json(make_response(None, client_id, get_next_transaction_id()))
@@ -275,7 +277,7 @@ def register_alpaca_routes(server):
         """Stop movement immediately."""
         client_id = int(request.form_data.get("ClientTransactionID", 0))
         try:
-            controller.halt()
+            await controller.halt()
             invalidate_cache()  # Force fresh values after halt
             print("[alpaca] Halt")
             return response.json(make_response(None, client_id, get_next_transaction_id()))

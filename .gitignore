@@ -27,5 +27,5 @@ Thumbs.db
 # Claude Code
 .claude/
 
-# References (large/binary files)
-references/Robofocus-User-Manual-1.pdf
+# References
+references/

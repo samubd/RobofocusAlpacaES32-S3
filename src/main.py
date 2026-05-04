@@ -95,7 +95,7 @@ async def setup_sta_mode():
     if AUTO_CONNECT_FOCUSER:
         print("[main] Auto-connecting to Robofocus...")
         try:
-            if controller.connect():
+            if await controller.connect():
                 print("[main] Focuser connected!")
             else:
                 print("[main] Focuser connection failed (will retry via API)")
@@ -108,16 +108,16 @@ async def button_loop():
     while True:
         for action, step in buttons.process():
             if action in ('move_in', 'move_out'):
-                if controller.connected and not controller.is_moving:
+                if controller.connected and not await controller.is_moving():
                     direction = 'in' if action == 'move_in' else 'out'
                     try:
-                        controller.move_relative(step, direction)
+                        await controller.move_relative(step, direction)
                     except Exception as e:
                         print(f"[btn] Move error: {e}")
             elif action == 'halt':
                 if controller.connected:
                     try:
-                        controller.halt()
+                        await controller.halt()
                         print("[btn] Halt!")
                     except Exception as e:
                         print(f"[btn] Halt error: {e}")
@@ -132,7 +132,7 @@ async def led_loop():
             is_sta=wifi.is_connected,
             sim_connected=controller.connected and controller.mode == 'simulator',
             alpaca_connected=alpaca_api.alpaca_client_connected,
-            is_moving=controller.is_moving,
+            is_moving=await controller.is_moving(),
         )
         await asyncio.sleep_ms(50)
 
@@ -155,6 +155,7 @@ async def main():
 
     # Collect garbage before starting
     gc.collect()
+    gc.threshold(gc.mem_free() // 4 + gc.mem_alloc())
     print(f"[main] Free memory: {gc.mem_free():,} bytes")
 
     asyncio.create_task(led_loop())
@@ -187,7 +188,7 @@ async def main():
         focuser_connected=controller.connected,
         focuser_mode=controller.mode,
         alpaca_client=alpaca_api.alpaca_client_connected,
-        focuser_position=controller.get_position() if controller.connected else None,
+        focuser_position=await controller.get_position() if controller.connected else None,
         step=buttons.step,
     )
 
@@ -198,9 +199,6 @@ async def main():
     print("[main] Server running. Press Ctrl+C to stop.")
 
     while True:
-        # Periodic maintenance
-        gc.collect()
-
         display.update(
             wifi_state=wifi.state,
             wifi_ssid=wifi.ssid,
@@ -209,7 +207,7 @@ async def main():
             focuser_connected=controller.connected,
             focuser_mode=controller.mode,
             alpaca_client=alpaca_api.alpaca_client_connected,
-            focuser_position=controller.get_position() if controller.connected else None,
+            focuser_position=await controller.get_position() if controller.connected else None,
             step=buttons.step,
         )
 
@@ -224,7 +222,7 @@ async def main():
             # Auto-connect focuser if not already connected
             if AUTO_CONNECT_FOCUSER and not controller.connected:
                 try:
-                    controller.connect()
+                    await controller.connect()
                     print("[main] Focuser connected")
                 except Exception as e:
                     print(f"[main] Focuser error: {e}")
@@ -243,6 +241,9 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\n[main] Shutting down...")
-        controller.disconnect()
+        try:
+            asyncio.run(controller.disconnect())
+        except Exception:
+            pass
         discovery.stop()
         print("[main] Goodbye!")

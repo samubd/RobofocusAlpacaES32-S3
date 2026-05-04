@@ -28,7 +28,7 @@ def register_gui_routes(server):
         try:
             global _wifi_cache, _wifi_cache_counter
 
-            status = controller.get_status()
+            status = await controller.get_status()
 
             # Add WiFi info (cached to reduce overhead)
             _wifi_cache_counter += 1
@@ -52,14 +52,14 @@ def register_gui_routes(server):
             if 'position' in data:
                 # Absolute move
                 target = int(data['position'])
-                controller.move(target)
+                await controller.move(target)
                 return response.json({"success": True, "target": target})
 
             elif 'steps' in data and 'direction' in data:
                 # Relative move
                 steps = int(data['steps'])
                 direction = data['direction']
-                controller.move_relative(steps, direction)
+                await controller.move_relative(steps, direction)
                 return response.json({"success": True, "steps": steps, "direction": direction})
 
             else:
@@ -72,7 +72,7 @@ def register_gui_routes(server):
     async def post_halt(request, response):
         """Emergency stop."""
         try:
-            controller.halt()
+            await controller.halt()
             return response.json({"success": True, "message": "Movement halted"})
         except Exception as e:
             return response.error(str(e), 500)
@@ -81,7 +81,7 @@ def register_gui_routes(server):
     async def post_connect(request, response):
         """Connect to focuser hardware."""
         try:
-            success = controller.connect()
+            success = await controller.connect()
             if success:
                 return response.json({"success": True, "message": "Connected"})
             else:
@@ -93,7 +93,7 @@ def register_gui_routes(server):
     async def post_disconnect(request, response):
         """Disconnect from focuser hardware."""
         try:
-            controller.disconnect()
+            await controller.disconnect()
             return response.json({"success": True, "message": "Disconnected"})
         except Exception as e:
             return response.error(str(e), 500)

@@ -12,6 +12,7 @@ Protocol:
 
 from machine import UART
 import time
+import uasyncio as asyncio
 
 
 class MovementState:
@@ -35,8 +36,8 @@ class RobofocusProtocol:
     # Serial settings (fixed by Robofocus protocol)
     BAUD_RATE = 9600
     UART_ID = 2      # Use UART2 (UART0 is USB debug)
-    TX_PIN = 17      # GPIO17 for TX
-    RX_PIN = 16      # GPIO16 for RX
+    TX_PIN = 13      # GPIO17 for TX
+    RX_PIN = 14      # GPIO16 for RX
 
     # Timeouts
     RESPONSE_TIMEOUT_MS = 3000   # Max wait for response
@@ -152,7 +153,7 @@ class RobofocusProtocol:
     # Connection
     # ========================================================================
 
-    def connect(self) -> bool:
+    async def connect(self) -> bool:
         """
         Open serial port and validate connection with FV handshake.
 
@@ -186,7 +187,7 @@ class RobofocusProtocol:
         # FV handshake
         print("[serial] Sending FV handshake...")
         try:
-            response = self._send_command_internal("FV", 0)
+            response = await self._send_command_internal("FV", 0)
             if response is None:
                 print("[serial] No response to FV")
                 self._uart = None
@@ -204,7 +205,7 @@ class RobofocusProtocol:
             print(f"[serial] Firmware: {self._firmware_version}")
 
             # Read initial position
-            pos_response = self._send_command_internal("FG", 0)
+            pos_response = await self._send_command_internal("FG", 0)
             if pos_response:
                 pos_parsed = self._parse_response(pos_response)
                 if pos_parsed['checksum_valid'] and pos_parsed['cmd'] == 'FD':
@@ -220,7 +221,7 @@ class RobofocusProtocol:
             self._uart = None
             return False
 
-    def disconnect(self):
+    async def disconnect(self):
         """Close serial connection."""
         if self._uart:
             self._uart.deinit()
@@ -249,7 +250,7 @@ class RobofocusProtocol:
             while self._uart.any():
                 self._uart.read(self._uart.any())
 
-    def _send_command_internal(self, cmd: str, value: int) -> bytes:
+    async def _send_command_internal(self, cmd: str, value: int) -> bytes:
         """
         Send command and read response (no retry).
 
@@ -266,9 +267,9 @@ class RobofocusProtocol:
         self._uart.write(packet)
 
         # Read response using the CRITICAL pattern
-        return self._read_response()
+        return await self._read_response()
 
-    def _read_response(self) -> bytes:
+    async def _read_response(self) -> bytes:
         """
         Read response with async char handling.
 
@@ -297,7 +298,7 @@ class RobofocusProtocol:
 
             if byte is None or len(byte) == 0:
                 # No data yet, continue waiting
-                time.sleep_ms(10)
+                await asyncio.sleep_ms(10)
                 continue
 
             char = byte[0]
@@ -319,7 +320,7 @@ class RobofocusProtocol:
 
                 if remaining is None or len(remaining) < 8:
                     # Wait a bit and try again
-                    time.sleep_ms(50)
+                    await asyncio.sleep_ms(50)
                     first_part = remaining or b''
                     second_part = self._uart.read(8 - len(first_part))
                     remaining = first_part + (second_part or b'')
@@ -349,7 +350,7 @@ class RobofocusProtocol:
     # Public API
     # ========================================================================
 
-    def get_position(self) -> int:
+    async def get_position(self) -> int:
         """
         Get current focuser position.
 
@@ -363,7 +364,7 @@ class RobofocusProtocol:
             return self._position
 
         # Query hardware
-        response = self._send_command_internal("FG", 0)
+        response = await self._send_command_internal("FG", 0)
 
         # If None, movement may have started externally
         if response is None:
@@ -375,7 +376,7 @@ class RobofocusProtocol:
 
         return self._position
 
-    def move_absolute(self, target: int) -> bool:
+    async def move_absolute(self, target: int) -> bool:
         """
         Start movement to absolute position (non-blocking).
 
@@ -403,7 +404,7 @@ class RobofocusProtocol:
 
         return True
 
-    def halt(self) -> bool:
+    async def halt(self) -> bool:
         """
         Stop movement immediately.
 
@@ -419,14 +420,14 @@ class RobofocusProtocol:
         self._flush_buffers()
         self._uart.write(b'\r')  # CR stops movement
 
-        time.sleep_ms(200)  # Wait for hardware to stop
+        await asyncio.sleep_ms(200)  # Wait for hardware to stop
 
         self._movement_state = MovementState.IDLE
         self._flush_buffers()
 
         return True
 
-    def get_temperature(self) -> float:
+    async def get_temperature(self) -> float:
         """
         Read temperature in Celsius.
 
@@ -449,7 +450,7 @@ class RobofocusProtocol:
             return self._temperature_cache
 
         # Query hardware
-        response = self._send_command_internal("FT", 0)
+        response = await self._send_command_internal("FT", 0)
 
         if response is None:
             if self._temperature_cache is not None:
@@ -472,11 +473,11 @@ class RobofocusProtocol:
 
         return celsius
 
-    def is_moving(self) -> bool:
+    async def is_moving(self) -> bool:
         """Check if focuser is currently moving."""
         return self._movement_state == MovementState.MOVING
 
-    def wait_for_movement(self, timeout_ms: int = None) -> int:
+    async def wait_for_movement(self, timeout_ms: int = None) -> int:
         """
         Wait for movement to complete (blocking).
 
@@ -504,7 +505,7 @@ class RobofocusProtocol:
                 break
 
             # Read and process any bytes (I/O/F)
-            response = self._read_response()
+            response = await self._read_response()
             if response:
                 parsed = self._parse_response(response)
                 if parsed['cmd'] == 'FD' and parsed['checksum_valid']:
@@ -512,7 +513,7 @@ class RobofocusProtocol:
                     print(f"[serial] Movement complete at {self._position}")
                 break
 
-            time.sleep_ms(100)
+            await asyncio.sleep_ms(100)
 
         return self._position
 
